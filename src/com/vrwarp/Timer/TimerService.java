@@ -8,6 +8,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.widget.Toast;
@@ -16,12 +17,19 @@ public class TimerService extends Service {
 	public final static String DURATION = "com.vrwarp.Timer.DURATION";
 	public final static String KILL_ID = "com.vrwarp.Timer.KILL_ID";
 	
+	private final static long SECOND = 1000;
+	private final static long MINUTE = 60 * SECOND;
+	private final static long HOUR = 60 * MINUTE;
+	
 	private Timer mTimer = null;
+    private final IBinder mBinder = new LocalBinder();
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		Bundle bundle = intent.getExtras();
 		if(bundle.containsKey(DURATION)) {
+			if(mTimer != null)
+				mTimer.abort();
 			long duration = intent.getExtras().getLong(DURATION);
 			mTimer = new Timer(this, startId, duration);
 			mTimer.setPriority(Thread.MIN_PRIORITY);
@@ -38,14 +46,24 @@ public class TimerService extends Service {
 
 	@Override
 	public IBinder onBind(Intent intent) {
-		// We don't provide binding, so return null
-		return null;
+		return mBinder;
 	}
 
 	@Override
 	public void onDestroy() {
 		Toast.makeText(this, "service done", Toast.LENGTH_SHORT).show(); 
 	}
+	
+	public boolean isRunning() {
+		return mTimer != null;
+	}
+	
+	public class LocalBinder extends Binder {
+        TimerService getService() {
+            // Return this instance of LocalService so clients can call public methods
+            return TimerService.this;
+        }
+    }
 	
 	private class Timer extends Thread {
 		private long mDuration;
@@ -71,11 +89,11 @@ public class TimerService extends Service {
 				UpdateNotification(delta);
 
 				try {
-					if(delta > 2 /* hours */ * 60 * 60 * 1000) {
-						Thread.sleep(60 /* minutes */ * 60 * 1000);
+					if(delta > 2 * HOUR) {
+						Thread.sleep(HOUR);
 					}
-					else if(delta > 2 /* minutes */ * 60 * 1000) {
-						Thread.sleep(60 /* seconds */ * 60 * 1000);
+					else if(delta > 2 * MINUTE) {
+						Thread.sleep(MINUTE);
 					}
 					else {
 						Thread.sleep(200 /* milliseconds */);
@@ -108,13 +126,13 @@ public class TimerService extends Service {
 
 		private void UpdateNotification(long delta) {
 			String msg;
-			if(delta > 60 /* minutes */ * 60 * 1000) {
-				long hours = delta / (60 * 60 * 1000);
-				msg = hours + (hours>1?" hours":" hour");
+			if(delta > HOUR) {
+				long hours = (delta + HOUR/2) / HOUR;
+				msg = "About " + hours + (hours>1?" hours":" hour");
 			}
-			else if(delta > 60 /* seconds */ * 1000) {
-				long minutes = delta / (60 * 1000);
-				msg = minutes + (minutes>1?" minutes":" minute");
+			else if(delta > MINUTE) {
+				long minutes = (delta + MINUTE/2) / MINUTE;
+				msg = "About " + minutes + (minutes>1?" minutes":" minute");
 			}
 			else {
 				long seconds = delta / (1000);
@@ -123,10 +141,8 @@ public class TimerService extends Service {
 
 			Context context = getApplicationContext();
 			
-			Intent intent = new Intent(context, TimerService.class);
-			intent.putExtra(KILL_ID, mId);
-
-			PendingIntent contentIntent = PendingIntent.getService(context, 0, intent, 0);
+			Intent intent = new Intent(context, TimerActivity.class);
+			PendingIntent contentIntent = PendingIntent.getActivity(context, 0, intent, 0);
 
 			Notification n = new Notification(R.drawable.icon, msg, System.currentTimeMillis());
 			n.setLatestEventInfo(context, msg, "Timer", contentIntent);
