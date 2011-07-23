@@ -5,9 +5,13 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
+import android.media.MediaPlayer;
+import android.media.MediaPlayer.OnCompletionListener;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.provider.Settings;
 import android.widget.Toast;
 
 public class TimerService extends Service {
@@ -33,9 +37,11 @@ public class TimerService extends Service {
 			mTimer.start();
 		}
 		else if(bundle.containsKey(KILL_ID)) {
-			mTimer.abort();
-			mTimer = null;
-			stopForeground(true);
+			if(mTimer != null) {
+				mTimer.abort();
+				mTimer = null;
+				stopForeground(true);
+			}
 		}
 
 		return START_NOT_STICKY;
@@ -103,6 +109,30 @@ public class TimerService extends Service {
 
 				delta = mDuration - (System.currentTimeMillis() - mStart);
 			}
+			
+			//;
+			
+			MediaPlayer mediaPlayer = new MediaPlayer();
+			OnCompletionListener listener = new OnCompletionListener() {
+				@Override
+				public void onCompletion(MediaPlayer mp) {
+					mService.mTimer = null;
+					mService.stopForeground(true);
+					mp.release();
+				}
+			};
+
+			try {
+				mediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
+				mediaPlayer.setVolume(1.0f, 1.0f);
+				mediaPlayer.setLooping(false);
+				mediaPlayer.setOnCompletionListener(listener);
+				mediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
+				mediaPlayer.prepare();
+				mediaPlayer.start();
+			} catch (Exception e) {
+				listener.onCompletion(mediaPlayer);
+			}
 		}
 
 		public void abort() {
@@ -137,7 +167,7 @@ public class TimerService extends Service {
 			Intent intent = new Intent(context, TimerActivity.class);
 			PendingIntent contentIntent = PendingIntent.getActivity(context, 0, intent, 0);
 
-			Notification n = new Notification(R.drawable.icon, msg, System.currentTimeMillis());
+			Notification n = new Notification(R.drawable.icon, "Timer set", System.currentTimeMillis());
 			n.setLatestEventInfo(context, msg, "Timer", contentIntent);
 			n.flags = Notification.FLAG_ONGOING_EVENT | Notification.FLAG_NO_CLEAR;
 			
