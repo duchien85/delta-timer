@@ -1,9 +1,6 @@
 package com.vrwarp.Timer;
 
-import java.util.HashMap;
-
 import android.app.Notification;
-import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
@@ -70,7 +67,6 @@ public class TimerService extends Service {
 		private long mStart;
 		private int mId;
 		private boolean mAlive;
-		private NotificationManager mManager;
 		private TimerService mService;
 
 		public Timer(TimerService service, int id, long duration) {
@@ -78,7 +74,6 @@ public class TimerService extends Service {
 			mStart = System.currentTimeMillis();
 			mId = id;
 			mAlive = true;
-			mManager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
 			mService = service;
 		}
 
@@ -103,10 +98,8 @@ public class TimerService extends Service {
 				}
 
 				// check to see if the timer was aborted
-				if(!mAlive) {
-					mManager.cancel(mId);
+				if(!mAlive)
 					return;
-				}
 
 				delta = mDuration - (System.currentTimeMillis() - mStart);
 			}
