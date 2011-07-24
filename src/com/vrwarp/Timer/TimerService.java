@@ -11,6 +11,7 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.Vibrator;
 import android.provider.Settings;
 import android.widget.Toast;
 
@@ -35,12 +36,14 @@ public class TimerService extends Service {
 			mTimer = new Timer(this, startId, duration);
 			mTimer.setPriority(Thread.MIN_PRIORITY);
 			mTimer.start();
+			mLastId = startId;
 		}
 		else if(bundle.containsKey(KILL_ID)) {
 			if(mTimer != null) {
 				mTimer.abort();
 				mTimer = null;
 				stopForeground(true);
+				stopSelf(startId);
 			}
 		}
 
@@ -112,13 +115,16 @@ public class TimerService extends Service {
 			
 			//;
 			
-			MediaPlayer mediaPlayer = new MediaPlayer();
+			final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+			final MediaPlayer mediaPlayer = new MediaPlayer();
 			OnCompletionListener listener = new OnCompletionListener() {
 				@Override
 				public void onCompletion(MediaPlayer mp) {
-					mService.mTimer = null;
-					mService.stopForeground(true);
 					mp.release();
+					vibrator.cancel();
+
+			        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILL_ID, mId);
+			        startService(serviceIntent);
 				}
 			};
 
@@ -130,6 +136,9 @@ public class TimerService extends Service {
 				mediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
 				mediaPlayer.prepare();
 				mediaPlayer.start();
+
+				long pattern[] = {0,1000,500,1000};
+				vibrator.vibrate(pattern, 2);
 			} catch (Exception e) {
 				listener.onCompletion(mediaPlayer);
 			}
