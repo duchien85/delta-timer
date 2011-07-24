@@ -36,7 +36,6 @@ public class TimerService extends Service {
 			mTimer = new Timer(this, startId, duration);
 			mTimer.setPriority(Thread.MIN_PRIORITY);
 			mTimer.start();
-			mLastId = startId;
 		}
 		else if(bundle.containsKey(KILL_ID)) {
 			if(mTimer != null) {
