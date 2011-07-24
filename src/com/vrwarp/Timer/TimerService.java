@@ -92,11 +92,17 @@ public class TimerService extends Service {
 				UpdateNotification(delta);
 
 				try {
-					if(delta > 2 * HOUR) {
+					if(delta > 3 * HOUR) {
 						Thread.sleep(HOUR);
+					}
+					else if(delta > 30 * MINUTE) {
+						Thread.sleep(15 * MINUTE);
 					}
 					else if(delta > 2 * MINUTE) {
 						Thread.sleep(MINUTE);
+					}
+					else if(delta > 15 * SECOND) {
+						Thread.sleep(5 * SECOND);
 					}
 					else {
 						Thread.sleep(200 /* milliseconds */);
@@ -157,9 +163,14 @@ public class TimerService extends Service {
 
 		private void UpdateNotification(long delta) {
 			String msg;
-			if(delta > HOUR) {
+			if(delta > 3 * HOUR) {
 				long hours = (delta + HOUR/2) / HOUR;
 				msg = "About " + hours + (hours>1?" hours":" hour");
+			}
+			else if(delta > HOUR) {
+				long hours = (delta + HOUR/2) / HOUR;
+				long minutes = ((delta - hours * HOUR) + MINUTE/2) / MINUTE;
+				msg = "About " + hours + (hours>1?" hours":" hour") + " and " + minutes + (minutes>1?" minutes":" minute");
 			}
 			else if(delta > MINUTE) {
 				long minutes = (delta + MINUTE/2) / MINUTE;
