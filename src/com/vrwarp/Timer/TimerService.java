@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.os.IBinder;
 import android.os.Vibrator;
 import android.provider.Settings;
-import android.widget.Toast;
 
 public class TimerService extends Service {
 	public final static String DURATION = "com.vrwarp.Timer.DURATION";
@@ -54,11 +53,6 @@ public class TimerService extends Service {
 		return mBinder;
 	}
 
-	@Override
-	public void onDestroy() {
-		Toast.makeText(this, "service done", Toast.LENGTH_SHORT).show(); 
-	}
-	
 	public boolean isRunning() {
 		return mTimer != null;
 	}
