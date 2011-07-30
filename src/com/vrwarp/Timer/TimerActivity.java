@@ -69,7 +69,7 @@ public class TimerActivity extends Activity {
         confirmButton.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-		        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILL_ID, true);
+		        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, true);
 		        startService(serviceIntent);
 
 		        displayMain();

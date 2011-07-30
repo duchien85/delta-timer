@@ -1,5 +1,8 @@
 package com.vrwarp.Timer;
 
+import java.util.Calendar;
+
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.PendingIntent;
 import android.app.Service;
@@ -11,12 +14,14 @@ import android.media.MediaPlayer.OnCompletionListener;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.os.PowerManager;
 import android.os.Vibrator;
 import android.provider.Settings;
 
 public class TimerService extends Service {
 	public final static String DURATION = "com.vrwarp.Timer.DURATION";
-	public final static String KILL_ID = "com.vrwarp.Timer.KILL_ID";
+	public final static String KILLID = "com.vrwarp.Timer.KILLID";
+	public final static String WAKEUP = "com.vrwarp.Timer.WAKEUP";
 	
 	private final static long SECOND = 1000;
 	private final static long MINUTE = 60 * SECOND;
@@ -32,16 +37,35 @@ public class TimerService extends Service {
 			if(mTimer != null)
 				mTimer.abort();
 			long duration = intent.getExtras().getLong(DURATION);
+		
 			mTimer = new Timer(this, startId, duration);
 			mTimer.setPriority(Thread.MIN_PRIORITY);
 			mTimer.start();
+
+			// setup a wake up call
+			if(duration > 2 * (MINUTE / SECOND)) {
+				Context context = getApplicationContext();
+				Intent wakeIntent = new Intent(context, AlarmReceiver.class);
+
+				PendingIntent sender = PendingIntent.getBroadcast(context, 0, wakeIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+				
+				Calendar cal = Calendar.getInstance();
+				cal.add(Calendar.SECOND, (int)duration - 30);
+				AlarmManager am = (AlarmManager) getSystemService(ALARM_SERVICE);
+				am.set(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), sender);
+			}
 		}
-		else if(bundle.containsKey(KILL_ID)) {
+		else if(bundle.containsKey(KILLID)) {
 			if(mTimer != null) {
 				mTimer.abort();
 				mTimer = null;
 				stopForeground(true);
 				stopSelf(startId);
+			}
+		}
+		else if(bundle.containsKey(WAKEUP)) {
+			if(mTimer != null) {
+				mTimer.interrupt();
 			}
 		}
 
@@ -81,6 +105,10 @@ public class TimerService extends Service {
 
 		@Override
 		public void run() {
+			// create a wake lock for sub 2 minute count down
+			PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+			PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "delta-timer");
+
 			long delta = mDuration - (System.currentTimeMillis() - mStart);
 			while(delta > 0) {
 				UpdateNotification(delta);
@@ -95,52 +123,61 @@ public class TimerService extends Service {
 					else if(delta > 2 * MINUTE) {
 						Thread.sleep(MINUTE);
 					}
-					else if(delta > 15 * SECOND) {
-						Thread.sleep(5 * SECOND);
-					}
 					else {
-						Thread.sleep(200 /* milliseconds */);
+						if(!wl.isHeld())
+							wl.acquire();
+						
+						if(delta > 15 * SECOND) {
+							Thread.sleep(5 * SECOND);
+						}
+						else {
+							Thread.sleep(200 /* milliseconds */);
+						}
 					}
 				} catch (InterruptedException e) {
 					// do nothing
 				}
 
 				// check to see if the timer was aborted
-				if(!mAlive)
-					return;
+				if(!mAlive) {
+					break;
+				}
 
 				delta = mDuration - (System.currentTimeMillis() - mStart);
 			}
 			
-			//;
-			
-			final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-			final MediaPlayer mediaPlayer = new MediaPlayer();
-			OnCompletionListener listener = new OnCompletionListener() {
-				@Override
-				public void onCompletion(MediaPlayer mp) {
-					mp.release();
-					vibrator.cancel();
-
-			        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILL_ID, mId);
-			        startService(serviceIntent);
+			if(mAlive) {
+				final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+				final MediaPlayer mediaPlayer = new MediaPlayer();
+				OnCompletionListener listener = new OnCompletionListener() {
+					@Override
+					public void onCompletion(MediaPlayer mp) {
+						mp.release();
+						vibrator.cancel();
+	
+				        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, mId);
+				        startService(serviceIntent);
+					}
+				};
+	
+				try {
+					mediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
+					mediaPlayer.setVolume(1.0f, 1.0f);
+					mediaPlayer.setLooping(false);
+					mediaPlayer.setOnCompletionListener(listener);
+					mediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
+					mediaPlayer.prepare();
+					mediaPlayer.start();
+	
+					long pattern[] = {0,1000,500,1000};
+					vibrator.vibrate(pattern, 2);
+				} catch (Exception e) {
+					listener.onCompletion(mediaPlayer);
 				}
-			};
-
-			try {
-				mediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
-				mediaPlayer.setVolume(1.0f, 1.0f);
-				mediaPlayer.setLooping(false);
-				mediaPlayer.setOnCompletionListener(listener);
-				mediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
-				mediaPlayer.prepare();
-				mediaPlayer.start();
-
-				long pattern[] = {0,1000,500,1000};
-				vibrator.vibrate(pattern, 2);
-			} catch (Exception e) {
-				listener.onCompletion(mediaPlayer);
 			}
+			
+			if(wl.isHeld())
+				wl.release();
 		}
 
 		public void abort() {
