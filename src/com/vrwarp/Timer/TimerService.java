@@ -8,9 +8,9 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
-import android.media.MediaPlayer.OnCompletionListener;
 import android.os.Binder;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -30,7 +30,14 @@ public class TimerService extends Service {
 	private Timer mTimer = null;
     private final IBinder mBinder = new LocalBinder();
 
-	@Override
+    @Override
+	public void onCreate() {
+    	// Add another alarm receiver for screen actions
+    	IntentFilter filter = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        registerReceiver(new AlarmReceiver(), filter);
+    }
+    
+    @Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		Bundle bundle = intent.getExtras();
 		if(bundle.containsKey(DURATION)) {
@@ -81,6 +88,14 @@ public class TimerService extends Service {
 		return mTimer != null;
 	}
 	
+	public long getDelta() {
+		if(mTimer == null)
+			return 0;
+		
+		long delta = mTimer.mDuration - (System.currentTimeMillis() - mTimer.mStart);
+		return delta;
+	}
+	
 	public class LocalBinder extends Binder {
         TimerService getService() {
             // Return this instance of LocalService so clients can call public methods
@@ -94,6 +109,8 @@ public class TimerService extends Service {
 		private int mId;
 		private boolean mAlive;
 		private TimerService mService;
+		private MediaPlayer mMediaPlayer;
+		private Vibrator mVibrator;
 
 		public Timer(TimerService service, int id, long duration) {
 			mDuration = duration * 1000;
@@ -101,6 +118,8 @@ public class TimerService extends Service {
 			mId = id;
 			mAlive = true;
 			mService = service;
+			mMediaPlayer = null;
+			mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
 		}
 
 		@Override
@@ -147,32 +166,21 @@ public class TimerService extends Service {
 			}
 			
 			if(mAlive) {
-				final Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-				final MediaPlayer mediaPlayer = new MediaPlayer();
-				OnCompletionListener listener = new OnCompletionListener() {
-					@Override
-					public void onCompletion(MediaPlayer mp) {
-						mp.release();
-						vibrator.cancel();
-	
-				        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, mId);
-				        startService(serviceIntent);
-					}
-				};
-	
+				mMediaPlayer = new MediaPlayer();
 				try {
-					mediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
-					mediaPlayer.setVolume(1.0f, 1.0f);
-					mediaPlayer.setLooping(false);
-					mediaPlayer.setOnCompletionListener(listener);
-					mediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
-					mediaPlayer.prepare();
-					mediaPlayer.start();
+					mMediaPlayer.setAudioStreamType(AudioManager.STREAM_ALARM);
+					mMediaPlayer.setVolume(1.0f, 1.0f);
+					mMediaPlayer.setLooping(true);
+					mMediaPlayer.setDataSource(getApplicationContext(), Settings.System.DEFAULT_ALARM_ALERT_URI);
+					mMediaPlayer.prepare();
+					mMediaPlayer.start();
 	
 					long pattern[] = {0,1000,500,1000};
-					vibrator.vibrate(pattern, 2);
+					mVibrator.vibrate(pattern, 2);
 				} catch (Exception e) {
-					listener.onCompletion(mediaPlayer);
+					// TODO: What should we *actually* do here?
+			        //Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, mId);
+			        //startService(serviceIntent);
 				}
 			}
 			
@@ -189,6 +197,15 @@ public class TimerService extends Service {
 				} catch (InterruptedException e) {
 					// do nothing
 				}
+			}
+			
+			// cancel vibration
+			mVibrator.cancel();
+			
+			// cancel and free media player
+			if(mMediaPlayer != null) {
+				mMediaPlayer.reset();
+				mMediaPlayer.release();
 			}
 		}
 
@@ -207,9 +224,12 @@ public class TimerService extends Service {
 				long minutes = (delta + MINUTE/2) / MINUTE;
 				msg = "About " + minutes + (minutes>1?" minutes":" minute");
 			}
-			else {
+			else if(delta >= SECOND) {
 				long seconds = delta / (1000);
 				msg = seconds + (seconds>1?" seconds":" second");
+			}
+			else {
+				msg = "Time's Up!";
 			}
 
 			Context context = getApplicationContext();

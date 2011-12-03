@@ -8,7 +8,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
 	@Override
 	public void onReceive(Context context, Intent intent) {
-        Intent serviceIntent = new Intent(context, TimerService.class).putExtra(TimerService.WAKEUP, true);
+        Intent serviceIntent = new Intent(context, TimerService.class).putExtra(TimerService.WAKEUP, intent.getAction());
         context.startService(serviceIntent);
 	}
 

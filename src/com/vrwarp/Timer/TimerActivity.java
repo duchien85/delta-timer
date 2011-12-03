@@ -83,7 +83,33 @@ public class TimerActivity extends Activity {
 				finish();
 			}
 		});
-}
+    }
+    
+    private void displayCompleted() {
+        setContentView(R.layout.completed);
+
+        Button resetButton = (Button)findViewById(R.id.completed_reset);
+        resetButton.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+		        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, true);
+		        startService(serviceIntent);
+
+		        displayMain();
+			}
+		});
+
+        Button doneButton = (Button)findViewById(R.id.completed_done);
+        doneButton.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+		        Intent serviceIntent = new Intent(getApplicationContext(), TimerService.class).putExtra(TimerService.KILLID, true);
+		        startService(serviceIntent);
+
+				finish();
+			}
+		});
+    }
     
     @Override
     protected void onDestroy() {
@@ -101,10 +127,15 @@ public class TimerActivity extends Activity {
                 // We've bound to LocalService, cast the IBinder and get LocalService instance
                 TimerService.LocalBinder binder = (TimerService.LocalBinder) service;
 
-                if(binder.getService().isRunning())
-                	displayTerminator();
-                else
+                if(binder.getService().isRunning()) {
+                    if(binder.getService().getDelta() > 0)
+                    	displayTerminator();
+                    else
+                    	displayCompleted();
+                }
+                else {
                 	displayMain();
+                }
             }
 
             public void onServiceDisconnected(ComponentName arg0) {
